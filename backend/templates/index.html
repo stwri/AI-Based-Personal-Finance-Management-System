@@ -1,0 +1,123 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>PFMS - Dashboard Prototype</title>
+    <style>
+      body { font-family: Arial, sans-serif; padding: 20px; }
+      .container { max-width: 900px; margin: 0 auto; }
+      .card { padding: 12px; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 12px; }
+      table { width: 100%; border-collapse: collapse; }
+      table, th, td { border: 1px solid #ddd; }
+      th, td { padding: 8px; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>PFMS Prototype Dashboard</h1>
+      <div class="card" id="auth">
+        <h3>Login / Register</h3>
+        <input id="username" placeholder="username" />
+        <input id="password" type="password" placeholder="password" />
+        <button onclick="register()">Register</button>
+        <button onclick="login()">Login</button>
+        <p id="auth-msg"></p>
+      </div>
+
+      <div class="card">
+        <h3>Upload CSV</h3>
+        <input type="file" id="fileInput" />
+        <button onclick="uploadCSV()">Upload</button>
+        <div id="upload-msg"></div>
+        <div style="margin-top: 12px;"><button onclick="linkMock()">Link Mock Bank</button> <button onclick="syncAccounts()">Sync Linked Accounts</button></div>
+      </div>
+
+      <div class="card">
+        <h3>Transactions</h3>
+        <button onclick="fetchTransactions()">Refresh</button>
+        <table id="tx-table"><thead><tr><th>ID</th><th>Date</th><th>Amount</th><th>Description</th><th>Category</th><th>Action</th></tr></thead><tbody></tbody></table>
+      </div>
+
+      <div class="card">
+        <h3>Forecast (7 days)</h3>
+        <button onclick="getForecast()">Get Forecast</button>
+        <pre id="forecast"></pre>
+      </div>
+
+      <div class="card">
+        <h3>Anomalies</h3>
+        <button onclick="getAnomalies()">Get Anomalies</button>
+        <ul id="anomalies"></ul>
+      </div>
+    </div>
+
+    <script>
+      let token = '';
+      function register(){
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+        fetch('/api/auth/register', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username,password})}).then(r=>r.json()).then(x=>{
+          token = x.token || '';
+          document.getElementById('auth-msg').innerText = token ? 'Registered' : JSON.stringify(x);
+        });
+      }
+      function login(){
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+        fetch('/api/auth/login', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username,password})}).then(r=>r.json()).then(x=>{
+          token = x.token || '';
+          document.getElementById('auth-msg').innerText = token ? 'Logged in' : JSON.stringify(x);
+        });
+      }
+      function uploadCSV(){
+        const f = document.getElementById('fileInput').files[0];
+        if(!f){ document.getElementById('upload-msg').innerText='Select file'; return; }
+        const fd = new FormData(); fd.append('file', f);
+        fetch('/api/transactions/upload', {method:'POST', headers: token ? {'Authorization': 'Bearer '+token} : {}, body: fd}).then(r=>r.json()).then(x=> document.getElementById('upload-msg').innerText = JSON.stringify(x));
+      }
+      function linkMock(){
+        fetch('/api/aggregator/link?provider=mock', {headers: token ? {'Authorization': 'Bearer '+token} : {}}).then(r=>r.json()).then(x=>{
+          alert(JSON.stringify(x));
+          // Simulate exchange: use token 'demo1'
+          fetch('/api/aggregator/exchange',{method:'POST', headers:{'Content-Type':'application/json', 'Authorization': 'Bearer '+token}, body: JSON.stringify({provider:'mock', token:'demo1'})}).then(r=>r.json()).then(x=>{alert(JSON.stringify(x));})
+        })
+      }
+      function syncAccounts(){
+        fetch('/api/aggregator/sync',{method:'POST', headers:{'Authorization': 'Bearer '+token}}).then(r=>r.json()).then(x=>{
+          alert('synced: '+x.synced);
+          fetchTransactions();
+        });
+      }
+      function fetchTransactions(){
+        fetch('/api/transactions', {headers: token ? {'Authorization': 'Bearer '+token} : {}}).then(r=>r.json()).then(data=>{
+          const tbody = document.querySelector('#tx-table tbody'); tbody.innerHTML='';
+          data.forEach(tx=>{
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${tx.id}</td><td>${tx.timestamp || ''}</td><td>${tx.amount}</td><td>${tx.description}</td><td>${tx.category || ''}</td><td><button onclick='correct(${tx.id})'>Correct</button> <button onclick='predict(${tx.id}, ${JSON.stringify(tx.description)})'>Predict</button></td>`
+            tbody.appendChild(tr);
+          })
+        });
+      }
+      function correct(id){
+        const cat = prompt('New category:'); if(!cat) return;
+        fetch('/api/transactions/'+id+'/categorize', {method:'POST', headers:{'Content-Type':'application/json', 'Authorization':'Bearer '+token}, body:JSON.stringify({category:cat})}).then(r=>r.json()).then(x=>{
+          alert(JSON.stringify(x)); fetchTransactions();
+        })
+      }
+      function predict(id, description){
+        fetch('/api/models/predict', {method:'POST', headers:{'Content-Type':'application/json', 'Authorization': 'Bearer '+token}, body:JSON.stringify({description})}).then(r=>r.json()).then(x=>{
+          alert('Predicted category: '+x.category);
+          // Optionally, patch transaction with predicted category
+        })
+      }
+      function getForecast(){
+        fetch('/api/models/forecast?periods=7', {headers: token ? {'Authorization': 'Bearer '+token}: {}}).then(r=>r.json()).then(x=>document.getElementById('forecast').innerText=JSON.stringify(x,null,2));
+      }
+      function getAnomalies(){
+        fetch('/api/models/anomalies', {headers: {'Authorization': 'Bearer '+token}}).then(r=>r.json()).then(x=>{
+          const list = document.getElementById('anomalies'); list.innerHTML=''; x.forEach(a=>{ const li=document.createElement('li'); li.innerText = `ID:${a.id} Amount:${a.amount} Desc:${a.description}`; list.appendChild(li) });
+        })
+      }
+    </script>
+  </body>
+  </html>

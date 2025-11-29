@@ -1,0 +1,6 @@
+date,account_id,amount,currency,description,merchant,category
+2025-11-01,checking,4.50,USD,Starbucks Coffee,Starbucks,Food & Drink
+2025-11-02,credit,30.00,USD,Shell Gas Station,Shell,Transport
+2025-11-05,savings,-100.00,USD,Transfer to savings,Transfer,Transfer
+2025-11-10,credit,9.99,USD,Spotify,Spotify,Subscriptions
+2025-11-15,checking,1500.00,USD,Salary,Employer,Income
